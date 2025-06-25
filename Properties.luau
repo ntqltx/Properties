@@ -94,7 +94,7 @@ function Properties.GetProperties(self: Properties, class: Instance | string): (
         result[property] = if success then value else nil
     end
 
-    return result
+    return result, nil
 end
 
 --[=[
