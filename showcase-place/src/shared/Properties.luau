@@ -61,7 +61,6 @@ function Properties.GetProperties(self: Properties, class: Instance | string): (
         return {}, "Properties are not initialized"
     end
 
-    warn(class)
     if not class then
         return {}, "No class (Instance or string) provided"
     end
@@ -86,7 +85,7 @@ function Properties.GetProperties(self: Properties, class: Instance | string): (
         result[property] = if success then value else nil
     end
     
-    return result
+    return result, nil
 end
 
 --[=[

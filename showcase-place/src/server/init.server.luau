@@ -6,7 +6,9 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ServerNetwork = require(ServerScriptService.Server.ServerNetwork)
 
 local spawned: {Instance} = {}
-ServerNetwork.CreatePart.On(function(player: Player, data: {[string]: any}): (string)
+local current: string = nil
+
+ServerNetwork.CreatePart.On(function(player: Player, data: {[string]: any})
 	local part = Instance.new("Part")
 	part.Position = player.Character
 		and (player.Character:GetPivot().Position + Vector3.new(0, 6, 0))
@@ -24,11 +26,18 @@ ServerNetwork.CreatePart.On(function(player: Player, data: {[string]: any}): (st
 	part.Name = name
 
 	table.insert(spawned, part)
-	return name
+	current = name
 end)
 
-ServerNetwork.GetProperties.On(function(_player: Player, class: string): ({[string]: any}, any)
+ServerNetwork.GetProperties.On(function(player: Player)
 	-- :: actually this can be performed with Instances, but I'm too lazy to do it
-	local find: Instance? = workspace:FindFirstChild(class)
-	return Properties:GetProperties(find :: any)
+	-- :: doing event returning BECAUSE FOR SOME REASON BLINK ISN'T WORKING ON CLIENT!!
+	if current then
+		local find: Instance? = workspace:FindFirstChild(current)
+		local result, err = Properties:GetProperties(find :: any)
+		ServerNetwork.ReturnProperties.Fire(player, result, err)
+	else
+		local message = "Spawn part before parsing properties"
+		ServerNetwork.ReturnProperties.Fire(player, message, nil)
+	end
 end)

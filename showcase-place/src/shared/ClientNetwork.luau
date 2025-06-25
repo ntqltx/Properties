@@ -9,7 +9,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Promise = require(ReplicatedStorage.Shared.Promise)
 local BASE_EVENT_NAME = "BLINK"
 local Invocations = 0
 
@@ -151,70 +150,44 @@ local Queue: any = {
     Unreliable = table.create(256)
 }
 
-Queue.Reliable[0] = table.create(256)
 Queue.Reliable[1] = table.create(256)
 export type Properties = {[string]: any}
 export type PartData = { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }
-local function WriteFUNCTION_DATA_GetProperties(Value: string, InvocationIdentifier: number): ()
-	-- Allocate BLOCK: 4 bytes
-	local BLOCK_START = Allocate(4)
+local function WriteEVENT_GetProperties(Value: nil): ()
+	-- Allocate BLOCK: 1 bytes
+	local BLOCK_START = Allocate(1)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
-	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
-	local Length = #Value
-	buffer.writeu16(SendBuffer, BLOCK_START + 2, Length)
-	Allocate(Length)
-	buffer.writestring(SendBuffer, SendOffset, Value, Length)
 end
 
-local function ReadFUNCTION_RETURN_GetProperties(): ({[string]: any}, string?)
-	-- Read BLOCK: 4 bytes
-	local BLOCK_START = Read(4)
-	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-	if Success ~= 1 then
-		error("Server encountered an error.")
-	end
-	local Value1 = {}
-	local Elements_1 = buffer.readu16(RecieveBuffer, BLOCK_START + 1)
-	for _ = 1, Elements_1 do
-		local OFFSET_0 = Read(2)
-		local Length = buffer.readu16(RecieveBuffer, OFFSET_0)
-		local Key_1 = buffer.readstring(RecieveBuffer, Read(Length), Length)
-		RecieveInstanceCursor += 1
-		local Element_1 = RecieveInstances[RecieveInstanceCursor]
-		Value1[Key_1] = Element_1
-	end
-	local Value2
-	if buffer.readu8(RecieveBuffer, BLOCK_START + 3) == 1 then
-		-- Read BLOCK: 2 bytes
-		local BLOCK_START = Read(2)
-		local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-		Value2 = buffer.readstring(RecieveBuffer, Read(Length), Length)
-	end
+local function ReadEVENT_ReturnProperties(): (any, any)
+	RecieveInstanceCursor += 1
+	local Value1 = RecieveInstances[RecieveInstanceCursor]
+	RecieveInstanceCursor += 1
+	local Value2 = RecieveInstances[RecieveInstanceCursor]
 	return Value1, Value2
 end
 
-local function WriteFUNCTION_DATA_CreatePart(Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }, InvocationIdentifier: number): ()
-	-- Allocate BLOCK: 21 bytes
-	local BLOCK_START = Allocate(21)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
-	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
+local function WriteEVENT_CreatePart(Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }): ()
+	-- Allocate BLOCK: 20 bytes
+	local BLOCK_START = Allocate(20)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 2)
 	local Vector = Value.Size
-	buffer.writef32(SendBuffer, BLOCK_START + 2, Vector.X)
-	buffer.writef32(SendBuffer, BLOCK_START + 6, Vector.Y)
-	buffer.writef32(SendBuffer, BLOCK_START + 10, Vector.Z)
+	buffer.writef32(SendBuffer, BLOCK_START + 1, Vector.X)
+	buffer.writef32(SendBuffer, BLOCK_START + 5, Vector.Y)
+	buffer.writef32(SendBuffer, BLOCK_START + 9, Vector.Z)
 	local Color = Value.Color
-	buffer.writeu8(SendBuffer, BLOCK_START + 14, Color.R * 255)
-	buffer.writeu8(SendBuffer, BLOCK_START + 15, Color.G * 255)
-	buffer.writeu8(SendBuffer, BLOCK_START + 16, Color.B * 255)
+	buffer.writeu8(SendBuffer, BLOCK_START + 13, Color.R * 255)
+	buffer.writeu8(SendBuffer, BLOCK_START + 14, Color.G * 255)
+	buffer.writeu8(SendBuffer, BLOCK_START + 15, Color.B * 255)
 	table.insert(SendInstances, if Value.Material == nil then Null else Value.Material)
 	if Value.Transparency > 65504 then
-		buffer.writeu16(SendBuffer, BLOCK_START + 17, 0b0_11111_0000000000)
+		buffer.writeu16(SendBuffer, BLOCK_START + 16, 0b0_11111_0000000000)
 	elseif Value.Transparency < -65504 then
-		buffer.writeu16(SendBuffer, BLOCK_START + 17, 0b1_11111_0000000000)
+		buffer.writeu16(SendBuffer, BLOCK_START + 16, 0b1_11111_0000000000)
 	elseif Value.Transparency ~= Value.Transparency then
-		buffer.writeu16(SendBuffer, BLOCK_START + 17, 0b1_11111_0000000001)
+		buffer.writeu16(SendBuffer, BLOCK_START + 16, 0b1_11111_0000000001)
 	elseif Value.Transparency == 0 then
-		buffer.writeu16(SendBuffer, BLOCK_START + 17, 0)
+		buffer.writeu16(SendBuffer, BLOCK_START + 16, 0)
 	else
 		local float = Value.Transparency
 		local Abosulte = math.abs(float)
@@ -228,32 +201,23 @@ local function WriteFUNCTION_DATA_CreatePart(Value: { Size: Vector3, Color: Colo
 		local Result = Mantissa
 			+ math.max(Exponent, 0) * 0x400
 			+ if float < 0 then 0x8000 else 0
-		buffer.writeu16(SendBuffer, BLOCK_START + 17, Result)
+		buffer.writeu16(SendBuffer, BLOCK_START + 16, Result)
 	end
-	buffer.writeu8(SendBuffer, BLOCK_START + 19, Value.CastShadow and 1 or 0)
-	buffer.writeu8(SendBuffer, BLOCK_START + 20, Value.Anchored and 1 or 0)
-end
-
-local function ReadFUNCTION_RETURN_CreatePart(): (string)
-	-- Read BLOCK: 3 bytes
-	local BLOCK_START = Read(3)
-	local Success = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-	if Success ~= 1 then
-		error("Server encountered an error.")
-	end
-	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 1)
-	local Value = buffer.readstring(RecieveBuffer, Read(Length), Length)
-	return Value
+	buffer.writeu8(SendBuffer, BLOCK_START + 18, Value.CastShadow and 1 or 0)
+	buffer.writeu8(SendBuffer, BLOCK_START + 19, Value.Anchored and 1 or 0)
 end
 
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
 	GetProperties = {
-		Invoke = NOOP
+		Fire = NOOP
+	},
+	ReturnProperties = {
+		On = NOOP
 	},
 	CreatePart = {
-		Invoke = NOOP
+		Fire = NOOP
 	},
 	})
 	return Returns :: BLINK_EVENTS_SYMBOL
@@ -292,27 +256,15 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		-- Read BLOCK: 1 bytes
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-		if Index == 0 then
-			-- Read BLOCK: 1 bytes
-			local BLOCK_START = Read(1)
-			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			if Calls[InvocationIdentifier] ~= nil then
-				local Success, ReturnValue1, ReturnValue2 = pcall(function ()
-					return ReadFUNCTION_RETURN_GetProperties()
-				end)
-				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue1, ReturnValue2)
-				Calls[InvocationIdentifier] = nil
-			end
-		elseif Index == 1 then
-			-- Read BLOCK: 1 bytes
-			local BLOCK_START = Read(1)
-			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			if Calls[InvocationIdentifier] ~= nil then
-				local Success, ReturnValue = pcall(function ()
-					return ReadFUNCTION_RETURN_CreatePart()
-				end)
-				task.spawn(Calls[InvocationIdentifier], Success, ReturnValue)
-				Calls[InvocationIdentifier] = nil
+		if Index == 1 then
+			local Value1: any, Value2: any = ReadEVENT_ReturnProperties()
+			if Events.Reliable[1] ~= nil then
+				Events.Reliable[1](Value1, Value2)
+			else
+				if #Queue.Reliable[1] > 256 then
+					warn("[Blink]: Event queue of \"ReturnProperties\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[1], {Value1, Value2} :: {any})
 			end
 		end
 	end
@@ -335,41 +287,27 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	GetProperties = {
-		Invoke = function(Value: string): any
-			return Promise.new(function (Resolve, Reject, OnCancel)
-				local InvocationIdentifier = Invoke()
-				if Calls[InvocationIdentifier] ~= nil then
-					Invocations -= 1
-					error("More than 256 calls are awaiting a response, this packet has been dropped.")
+		Fire = function(Value: nil): ()
+			WriteEVENT_GetProperties(Value)
+		end
+	},
+	ReturnProperties = {
+		On = function(Listener: (Value1: any, Value2: any) -> ()): () -> ()
+			Events.Reliable[1] = Listener
+			for Index, Arguments in Queue.Reliable[1] do
+				Listener(table.unpack(Arguments))
+			end
+			Queue.Reliable[1] = {}
+			return function (): ()
+				if Events.Reliable[1] == Listener then
+					Events.Reliable[1] = nil
 				end
-				WriteFUNCTION_DATA_GetProperties(Value, InvocationIdentifier)
-				Calls[InvocationIdentifier] = coroutine.running()
-				OnCancel(function ()
-					Calls[InvocationIdentifier] = nil
-				end)
-				local Success, ReturnValue1: {[string]: any}, ReturnValue2: string? = coroutine.yield()
-				if Success ~= true then
-					Reject("There was an exception while processing \"GetProperties\".")
-					return 
-				end
-				Resolve(ReturnValue1, ReturnValue2)
-			end)
+			end
 		end
 	},
 	CreatePart = {
-		Invoke = function(Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }): (string)
-			local InvocationIdentifier = Invoke()
-			if Calls[InvocationIdentifier] ~= nil then
-				Invocations -= 1
-				error("More than 256 calls are awaiting a response, this packet has been dropped.")
-			end
-			WriteFUNCTION_DATA_CreatePart(Value, InvocationIdentifier)
-			Calls[InvocationIdentifier] = coroutine.running()
-			local Success, ReturnValue: string = coroutine.yield()
-			if Success ~= true then
-				error("There was an exception while processing \"CreatePart\".")
-			end
-			return ReturnValue
+		Fire = function(Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }): ()
+			WriteEVENT_CreatePart(Value)
 		end
 	},
 })

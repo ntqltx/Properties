@@ -10,7 +10,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Promise = require(ReplicatedStorage.Shared.Promise)
 local BASE_EVENT_NAME = "BLINK"
 local Invocations = 0
 
@@ -153,46 +152,22 @@ local Queue: any = {
 }
 
 Queue.Reliable[0] = table.create(256)
-Queue.Reliable[1] = table.create(256)
+Queue.Reliable[2] = table.create(256)
 export type Properties = {[string]: any}
 export type PartData = { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }
-local function ReadFUNCTION_DATA_GetProperties(): (string)
-	-- Read BLOCK: 2 bytes
-	local BLOCK_START = Read(2)
-	local Length = buffer.readu16(RecieveBuffer, BLOCK_START + 0)
-	local Value = buffer.readstring(RecieveBuffer, Read(Length), Length)
-	return Value
+local function ReadEVENT_GetProperties(): (nil)
+	return nil
 end
 
-local function WriteFUNCTION_RETURN_GetProperties(Value1: {[string]: any}, Value2: string?, InvocationIdentifier: number): ()
-	-- Allocate BLOCK: 6 bytes
-	local BLOCK_START = Allocate(6)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
-	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
-	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
-	local Elements_1 = 0
-	for Key_1, Element_1 in Value1 do
-		Elements_1 += 1
-		local Length = #Key_1
-		local OFFSET_0 = Allocate(2)
-		buffer.writeu16(SendBuffer, OFFSET_0, Length)
-		Allocate(Length)
-		buffer.writestring(SendBuffer, SendOffset, Key_1, Length)
-		table.insert(SendInstances, if Element_1 == nil then Null else Element_1)
-	end
-	buffer.writeu16(SendBuffer, BLOCK_START + 3, Elements_1)
-	buffer.writeu8(SendBuffer, BLOCK_START + 5, Value2 ~= nil and 1 or 0)
-	if Value2 ~= nil then
-		-- Allocate BLOCK: 2 bytes
-		local BLOCK_START = Allocate(2)
-		local Length = #Value2
-		buffer.writeu16(SendBuffer, BLOCK_START + 0, Length)
-		Allocate(Length)
-		buffer.writestring(SendBuffer, SendOffset, Value2, Length)
-	end
+local function WriteEVENT_ReturnProperties(Value1: any, Value2: any): ()
+	-- Allocate BLOCK: 1 bytes
+	local BLOCK_START = Allocate(1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
+	table.insert(SendInstances, if Value1 == nil then Null else Value1)
+	table.insert(SendInstances, if Value2 == nil then Null else Value2)
 end
 
-local function ReadFUNCTION_DATA_CreatePart(): ({ Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean })
+local function ReadEVENT_CreatePart(): ({ Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean })
 	-- Read BLOCK: 19 bytes
 	local BLOCK_START = Read(19)
 	local Value = {} :: any
@@ -232,23 +207,17 @@ local function ReadFUNCTION_DATA_CreatePart(): ({ Size: Vector3, Color: Color3, 
 	return Value
 end
 
-local function WriteFUNCTION_RETURN_CreatePart(Value: string, InvocationIdentifier: number): ()
-	-- Allocate BLOCK: 5 bytes
-	local BLOCK_START = Allocate(5)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
-	buffer.writeu8(SendBuffer, BLOCK_START + 1, InvocationIdentifier)
-	buffer.writeu8(SendBuffer, BLOCK_START + 2, 1)
-	local Length = #Value
-	buffer.writeu16(SendBuffer, BLOCK_START + 3, Length)
-	Allocate(Length)
-	buffer.writestring(SendBuffer, SendOffset, Value, Length)
-end
-
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
 	GetProperties = {
 		On = NOOP
+	},
+	ReturnProperties = {
+		Fire = NOOP,
+		FireAll = NOOP,
+		FireList = NOOP,
+		FireExcept = NOOP
 	},
 	CreatePart = {
 		On = NOOP
@@ -311,30 +280,24 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
 		if Index == 0 then
-			-- Read BLOCK: 1 bytes
-			local BLOCK_START = Read(1)
-			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			local Value: string = ReadFUNCTION_DATA_GetProperties()
+			local Value: nil = ReadEVENT_GetProperties()
 			if Events.Reliable[0] ~= nil then
-				task.spawn(Events.Reliable[0], Player, Value, InvocationIdentifier)
+				Events.Reliable[0](Player, Value)
 			else
 				if #Queue.Reliable[0] > 256 then
 					warn("[Blink]: Event queue of \"GetProperties\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[0], {Player, Value, InvocationIdentifier} :: {any})
+				table.insert(Queue.Reliable[0], {Player, Value} :: {any})
 			end
-		elseif Index == 1 then
-			-- Read BLOCK: 1 bytes
-			local BLOCK_START = Read(1)
-			local InvocationIdentifier = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
-			local Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean } = ReadFUNCTION_DATA_CreatePart()
-			if Events.Reliable[1] ~= nil then
-				task.spawn(Events.Reliable[1], Player, Value, InvocationIdentifier)
+		elseif Index == 2 then
+			local Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean } = ReadEVENT_CreatePart()
+			if Events.Reliable[2] ~= nil then
+				Events.Reliable[2](Player, Value)
 			else
-				if #Queue.Reliable[1] > 256 then
+				if #Queue.Reliable[2] > 256 then
 					warn("[Blink]: Event queue of \"CreatePart\" exceeded 256, did you forget to implement a listener?")
 				end
-				table.insert(Queue.Reliable[1], {Player, Value, InvocationIdentifier} :: {any})
+				table.insert(Queue.Reliable[2], {Player, Value} :: {any})
 			end
 		end
 	end
@@ -357,59 +320,77 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	GetProperties = {
-		On = function(Listener: (Player, string) -> ({[string]: any}, string?)): ()
-			Events.Reliable[0] = function(Player: Player, Value: string, InvocationIdentifier: number): ()
-				local ReturnValue1: {[string]: any}, ReturnValue2: string?;
-				local Success, Error = pcall(function ()
-					ReturnValue1, ReturnValue2 = Listener(Player, Value)
-				end)
-				Load(PlayersMap[Player])
-				if Success ~= true then
-					local Position = Allocate(3)
-					buffer.writeu8(SendBuffer, Position, 0)
-					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
-					buffer.writeu8(SendBuffer, Position + 2, 0)
-					warn(`"GetProperties" encountered an error, {Error}`)
-				else
-					WriteFUNCTION_RETURN_GetProperties(ReturnValue1, ReturnValue2, InvocationIdentifier)
-				end
-				PlayersMap[Player] = Save()
+		On = function(Listener: (Player: Player, Value: nil) -> ()): () -> ()
+			Events.Reliable[0] = Listener
+			for Index, Arguments in Queue.Reliable[0] do
+				Listener(table.unpack(Arguments))
 			end
-			task.spawn(function (): ()
-				local EventQueue = Queue.Reliable[0] or {}
-				Queue.Reliable[0] = nil
-				for Index, Arguments in EventQueue do
-					Events.Reliable[0](table.unpack(Arguments))
+			Queue.Reliable[0] = {}
+			return function (): ()
+				if Events.Reliable[0] == Listener then
+					Events.Reliable[0] = nil
 				end
-			end)
+			end
 		end
 	},
-	CreatePart = {
-		On = function(Listener: (Player, { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }) -> (string)): ()
-			Events.Reliable[1] = function(Player: Player, Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }, InvocationIdentifier: number): ()
-				local ReturnValue: string;
-				local Success, Error = pcall(function ()
-					ReturnValue = Listener(Player, Value)
-				end)
+	ReturnProperties = {
+		Fire = function(Player: Player, Value1: any, Value2: any): ()
+			Load(PlayersMap[Player])
+			WriteEVENT_ReturnProperties(Value1, Value2)
+			PlayersMap[Player] = Save()
+		end,
+		FireAll = function(Value1: any, Value2: any): ()
+			Load()
+			WriteEVENT_ReturnProperties(Value1, Value2)
+			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+			for _, Player in Players:GetPlayers() do
 				Load(PlayersMap[Player])
-				if Success ~= true then
-					local Position = Allocate(3)
-					buffer.writeu8(SendBuffer, Position, 1)
-					buffer.writeu8(SendBuffer, Position + 1, InvocationIdentifier)
-					buffer.writeu8(SendBuffer, Position + 2, 0)
-					warn(`"CreatePart" encountered an error, {Error}`)
-				else
-					WriteFUNCTION_RETURN_CreatePart(ReturnValue, InvocationIdentifier)
-				end
+				local Position = Allocate(Size)
+				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
 				PlayersMap[Player] = Save()
 			end
-			task.spawn(function (): ()
-				local EventQueue = Queue.Reliable[1] or {}
-				Queue.Reliable[1] = nil
-				for Index, Arguments in EventQueue do
-					Events.Reliable[1](table.unpack(Arguments))
+		end,
+		FireList = function(List: {Player}, Value1: any, Value2: any): ()
+			Load()
+			WriteEVENT_ReturnProperties(Value1, Value2)
+			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+			for _, Player in List do
+				Load(PlayersMap[Player])
+				local Position = Allocate(Size)
+				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+				PlayersMap[Player] = Save()
+			end
+		end,
+		FireExcept = function(Except: Player, Value1: any, Value2: any): ()
+			Load()
+			WriteEVENT_ReturnProperties(Value1, Value2)
+			local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+			for _, Player in Players:GetPlayers() do
+				if Player == Except then
+					continue
 				end
-			end)
+				Load(PlayersMap[Player])
+				local Position = Allocate(Size)
+				buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+				table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+				PlayersMap[Player] = Save()
+			end
+		end,
+	},
+	CreatePart = {
+		On = function(Listener: (Player: Player, Value: { Size: Vector3, Color: Color3, Material: any, Transparency: number, CastShadow: boolean, Anchored: boolean }) -> ()): () -> ()
+			Events.Reliable[2] = Listener
+			for Index, Arguments in Queue.Reliable[2] do
+				Listener(table.unpack(Arguments))
+			end
+			Queue.Reliable[2] = {}
+			return function (): ()
+				if Events.Reliable[2] == Listener then
+					Events.Reliable[2] = nil
+				end
+			end
 		end
 	},
 })

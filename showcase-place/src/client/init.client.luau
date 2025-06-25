@@ -12,23 +12,19 @@ local castShadowState = Iris.State(true)
 local anchoredState = Iris.State(false)
 
 local new_output: any = {}
-local selected: string = nil
-
 local function spawnPart()
 	local data = {
-		Size = sizeState:get(), Color = colorState:get(),
-		Material = materialState:get(), Transparency = transparencyState:get(),
-		CastShadow = castShadowState:get(), Anchored = anchoredState:get()
-	}
-	selected = ClientNetwork.CreatePart.Invoke(data)
-	warn(selected)
+        Size = sizeState:get(), Color = colorState:get(),
+        Material = materialState:get(), Transparency = transparencyState:get(),
+        CastShadow = castShadowState:get(), Anchored = anchoredState:get()
+    }
+    ClientNetwork.CreatePart.Fire(data)
 end
 
-local function parseProperties()
-	-- :: actually this can be performed with Instances, but I'm too lazy to do it
-	local properties, err = select(2, ClientNetwork.GetProperties.Invoke(selected):await())
-	new_output = if not err then properties else err
-end
+-- :: doing event returning BECAUSE FOR SOME REASON BLINK ISN'T WORKING ON CLIENT!!
+ClientNetwork.ReturnProperties.On(function(result: any, err: any)
+	new_output = if not err then result else err
+end)
 
 Iris:Connect(function()
 	local editorSize = Iris.State(Vector2.new(407, 700))
@@ -77,14 +73,15 @@ Iris:Connect(function()
 			local parse = Iris.Button({"Parse"})
 			if parse.hovered() then
 				if parse.clicked() then
-					parseProperties()
+					new_output = "Parsing... It could take some time"
+					ClientNetwork.GetProperties.Fire()
 				end
 				Iris.Tooltip({"Parses last created part properties"})
 			end
 
 			local hint = Iris.Text({"(?)", false, Color3.fromRGB(150, 150, 150)})
 			if hint.hovered() then
-				Iris.Tooltip({"When you spawning new part, it's creating it in the server via Blink Networking\nand then you can parse last part you spawned, to get all props/values from it\n(You can move and resize window)"})
+				Iris.Tooltip({"When you spawning new part, it's creating it in the server via Blink Networking\nand then you can parse last part you spawned, to get all props/values from it\n(You can resize the window)"})
 			end
 		end
 		Iris.End()
