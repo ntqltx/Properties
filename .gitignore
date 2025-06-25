@@ -1,0 +1,11 @@
+# Project place file
+showcase-place.rbxlx
+place.rbxl
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# Ignoring unneseccary files
+.vscode
+sourcemap.json

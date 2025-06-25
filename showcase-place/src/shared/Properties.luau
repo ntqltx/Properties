@@ -1,9 +1,9 @@
 --!strict
 
 --[[
-    Properties Module written by avlex (@uid3v)
-    Useful for getting all properties and its values
-    from Instance, or specific class name.
+    Properties Module written by alex (@uid3v)
+    Useful for getting all properties and it's values
+    From Instance, or specific class name.
 
     Methods:
         Properties:GetProperties(): (class: Instance | string) -> (table, string?)
@@ -12,28 +12,23 @@
 ]]
 
 local HttpService = game:GetService("HttpService")
-local Properties = {
-     -- :: endpoint that gives version + api‑dump
-    _api = "https://properties.glitch.me/" :: string,
 
-    -- :: raw structure for every class we parse
-    _classes = {} :: { [string]: {
+local Properties = {
+    _api = "https://properties.glitch.me/" :: string,
+    _classes = {} :: {[string]: {
         Superclass: string?,
         Properties: {string}?,
         Derived: { [string]: any }?
     }},
-    _instancesProperties = {} :: { [string]: {string}? }?,
-
-    -- :: properties that are deprecated and we want to ignore
-    -- :: (gonna add better support later)
+    _instancesProperties = {} :: { [string]: {}? }?,
     _deprecatedProperties = {
         RobloxLocked = true,
         archivable = true,
-        className = true,
+        className = true
     } :: { [string]: boolean },
 
     _initializing = false :: boolean,
-    _initialized  = false :: boolean,
+    _initialized = false :: boolean,
 }
 
 --[=[
@@ -66,34 +61,31 @@ function Properties.GetProperties(self: Properties, class: Instance | string): (
         return {}, "Properties are not initialized"
     end
 
+    warn(class)
     if not class then
         return {}, "No class (Instance or string) provided"
     end
 
-    -- :: safeguard in case cache nil (should never happen after init)
     if not self._instancesProperties then
         return {}, "No InstancesProperties table found"
     end
 
-    -- :: turn Instance into its ClassName, keep string as is
     local className = if typeof(class) == "Instance" then class.ClassName else class
     local properties = self._instancesProperties[className]
     local result: { [string]: any? } = {}
 
-    -- :: unknown class guard
     if not properties then
         return {}, `Unknown class: {className}`
     end
 
-    -- :: loop over each property
     for _, property in pairs(properties) do
         local success, value = pcall(function()
             return (class :: any)[property]
         end)
-        -- :: assign read value or nil on failure
+        
         result[property] = if success then value else nil
     end
-
+    
     return result
 end
 
@@ -120,32 +112,29 @@ function Properties.HasProperty(self: Properties, class: Instance | string, prop
         return false, "Properties are not initialized"
     end
 
-    -- :: validate call args
     if not class then
         return false, "No class (Instance or string) provided"
     end
-
+    
     if not self._instancesProperties then
         return false, "No InstancesProperties table found"
     end
 
-    -- :: turn Instance into its ClassName, keep string as is
     local className = if typeof(class) == "Instance" then class.ClassName else class
     local properties = self._instancesProperties[className]
-    
+
     if not properties then
         return false, `Unknown class: {className}`
     end
-
-    -- :: iterate properties, return true if found
+    
     for _, prop: any? in ipairs(properties) do
         if prop ~= property then
             continue
         end
+
         return true, nil
     end
 
-    -- :: returning false without an error
     return false, nil
 end
 
@@ -182,20 +171,16 @@ function Properties.GetAllClasses(self: Properties): ({string}, string?)
         return {}, "No InstancesProperties table found"
     end
 
-    -- :: collect classes
     local classes = {}
-    for name in pairs(self._instancesProperties) do
-        table.insert(classes, name)
+    for class_name in pairs(self._instancesProperties) do
+        table.insert(classes, class_name)
     end
 
-    -- :: sorting it in alphabetical order
     table.sort(classes)
     return classes
 end
 
--- :: fetch api‑dump json (two requests: version then dump)
 function Properties._fetchApiDump(self: Properties): ({any}?, string?)
-    -- :: 1/2 – get latest engine version string
     local success, response = pcall(function()
         return HttpService:GetAsync(`{self._api}/version`)
     end)
@@ -204,7 +189,6 @@ function Properties._fetchApiDump(self: Properties): ({any}?, string?)
         return nil, `Failed to fetch Roblox Version: {tostring(response)}`
     end
 
-    -- :: 2/2 – request actual api‑dump for that version
     local url = `{self._api}/api-dump?version={response}`
     local success_dump, response_dump = pcall(function()
         return HttpService:GetAsync(url)
@@ -214,7 +198,6 @@ function Properties._fetchApiDump(self: Properties): ({any}?, string?)
         return nil, `API dump request failed: {tostring(response_dump)}`
     end
     
-    -- :: decode json
     local success_data, data = pcall(HttpService.JSONDecode, HttpService, response_dump)
     if not success_data then
         return nil, `Failed to parse API dump: {tostring(data)}`
@@ -223,9 +206,7 @@ function Properties._fetchApiDump(self: Properties): ({any}?, string?)
     return data, nil
 end
 
--- :: build class tree with own properties
 function Properties._buildDerivedStructure(self: Properties, apiData: { [string]: any }): ({ [string]: any? }?)
-    -- :: iterate every class definition
     for _, class_data in ipairs(apiData.Classes) do
         local className: string = class_data.Name
         local superclass = if class_data.Superclass ~= "<<<ROOT>>>" then class_data.Superclass else nil
@@ -236,19 +217,17 @@ function Properties._buildDerivedStructure(self: Properties, apiData: { [string]
             Derived = {}
         }
 
-        -- :: collect property members
         for _, member in ipairs(class_data.Members) do
             if member.MemberType == "Property" then
-                -- :: ignore deprecated ones
                 if self._deprecatedProperties[member.Name] then
                     continue 
                 end
+
                 table.insert(self._classes[className].Properties :: {string}, member.Name)
             end
         end
     end
 
-    -- :: build parent‑child links
     local rootClasses = {}
     for class_name, class_data in pairs(self._classes) do
         if not class_data.Superclass then
@@ -258,11 +237,11 @@ function Properties._buildDerivedStructure(self: Properties, apiData: { [string]
             if (not superclass) or (not superclass.Derived) then
                 continue
             end
+
             superclass.Derived[class_name] = class_data
         end
     end
 
-    -- :: deep copy helper so outside cannot mutate cache
     local function convertClass(classData: any): (any)
         local result = {
             Properties = classData.Properties or {},
@@ -272,6 +251,7 @@ function Properties._buildDerivedStructure(self: Properties, apiData: { [string]
         for derived_name, derived_data in pairs(classData.Derived) do
             result.Derived[derived_name] = convertClass(derived_data)
         end
+        
         return result
     end
 
@@ -285,24 +265,23 @@ end
 
 function Properties._buildPropertiesTable(self: Properties, derivedStructure: { [string]: any? })
     local function processType(typeName: string, typeData: any, parsedProps: {string}?): ({string}?)
-        -- :: clone lists to avoid mutation
         local currentProps = if typeData.Properties then table.clone(typeData.Properties) else {}
         local allProps = if parsedProps then table.clone(parsedProps) :: {} else {}
 
-        -- :: add own props not yet in inherited list
         for _, property in ipairs(currentProps) do
             if table.find(allProps, property) then
                 continue
             end
+
             table.insert(allProps, property)
         end
 
         if not self._instancesProperties then
             return nil
         end
+
         self._instancesProperties[typeName] = allProps
         
-        -- :: recurse into derived classes
         if typeData.Derived then
             for derivedName, derivedDef in pairs(typeData.Derived) do
                 processType(derivedName, derivedDef, allProps)
@@ -312,27 +291,22 @@ function Properties._buildPropertiesTable(self: Properties, derivedStructure: { 
         return allProps
     end
 
-    -- :: start recursion for each root
     for class_name, class_data in pairs(derivedStructure) do
         processType(class_name, class_data, nil)
     end
 end
 
--- :: ensure lazy initialization
-function Properties._isInitialized(self: Properties): boolean
-    -- :: already done
+function Properties._isInitialized(self: Properties): (boolean)
     if self._initialized then
         return true
     end
-
-    -- :: if another coroutine in progress, just wait
-    if self._initializing then
+    
+    if self._initializing then 
         repeat task.wait()
-        until self._initialized
-        return true
+        until self._initialized 
+        return true 
     end
-
-    -- :: fetching and preparing everything
+    
     self._initializing = true
     local success, err = pcall(function()
         local apiData = self:_fetchApiDump() :: {}
@@ -343,20 +317,18 @@ function Properties._isInitialized(self: Properties): boolean
             self._initialized = true
         end
     end)
-
+    
+    self._initializing = false
     if not success then
-        -- :: warn if not success
         warn(`Properties module initialization failed: {err}`)
         return false
     end
-    
-    -- :: finally finished initializing
-    self._initializing = false
+
     return true
 end
 
 type Properties = typeof(Properties)
-task.defer(function()
+task.spawn(function()
     Properties:_isInitialized()
 end)
 

@@ -1,0 +1,25 @@
+option ClientOutput = "src/shared/ClientNetwork.luau"
+option ServerOutput = "src/server/ServerNetwork.luau"
+option PromiseLibrary = "ReplicatedStorage.Shared.Promise"
+
+map Properties = {[string]: unknown}
+struct PartData {
+    Size: vector,
+    Color: Color3, 
+    Material: unknown,
+    Transparency: f16,
+    CastShadow: boolean,
+    Anchored: boolean,
+}
+
+function GetProperties {
+    Yield: Promise,
+    Data: string,
+    Return: (Properties, string?)
+}
+
+function CreatePart {
+    Yield: Coroutine,
+    Data: PartData,
+    Return: string,
+}
